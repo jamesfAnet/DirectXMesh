@@ -5,7 +5,7 @@
 //
 // http://en.wikipedia.org/wiki/Wavefront_.obj_file
 //
-// Copyright (c) Microsoft Corporation. All rights reserved.
+// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 //
 // http://go.microsoft.com/fwlink/?LinkID=324981
@@ -13,6 +13,7 @@
 
 #pragma once
 
+#if defined(WIN32) || defined(_WIN32)
 #pragma warning(push)
 #pragma warning(disable : 4005)
 #define WIN32_LEAN_AND_MEAN
@@ -24,25 +25,34 @@
 #define NOHELP
 #pragma warning(pop)
 
-#include <windows.h>
+#include <Windows.h>
+#else // !WIN32
+#include <wsl/winadapter.h>
+#include <wsl/wrladapter.h>
+
+#ifndef MAX_PATH
+#define MAX_PATH 4096
+#endif
+#endif
 
 #include <algorithm>
+#include <cstdint>
 #include <fstream>
 #include <string>
 #include <vector>
 #include <unordered_map>
 
-#include <stdint.h>
+#ifndef WIN32
+#include <filesystem>
+#endif
 
-#include <directxmath.h>
-#include <directxcollision.h>
+#include <DirectXMath.h>
+#include <DirectXCollision.h>
 
 template<class index_t>
 class WaveFrontReader
 {
 public:
-    typedef index_t index_t;
-
     struct Vertex
     {
         DirectX::XMFLOAT3 position;
@@ -62,12 +72,16 @@ public:
 
         std::wifstream InFile(szFileName);
         if (!InFile)
-            return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
+            return /* HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND) */ static_cast<HRESULT>(0x80070002L);
 
+#ifdef WIN32
         wchar_t fname[_MAX_FNAME] = {};
         _wsplitpath_s(szFileName, nullptr, 0, nullptr, 0, fname, _MAX_FNAME, nullptr, 0);
-
         name = fname;
+#else
+        auto path = std::filesystem::path(szFileName);
+        name = path.filename().c_str();
+#endif
 
         std::vector<XMFLOAT3>   positions;
         std::vector<XMFLOAT3>   normals;
@@ -160,12 +174,12 @@ public:
                     else if (iPosition < 0)
                     {
                         // Negative values are relative indices
-                        vertexIndex = uint32_t(positions.size() + iPosition);
+                        vertexIndex = uint32_t(ptrdiff_t(positions.size()) + iPosition);
                     }
                     else
                     {
                         // OBJ format uses 1-based arrays
-                        vertexIndex = iPosition - 1;
+                        vertexIndex = uint32_t(iPosition - 1);
                     }
 
                     if (vertexIndex >= positions.size())
@@ -191,12 +205,12 @@ public:
                             else if (iTexCoord < 0)
                             {
                                 // Negative values are relative indices
-                                coordIndex = uint32_t(texCoords.size() + iTexCoord);
+                                coordIndex = uint32_t(ptrdiff_t(texCoords.size()) + iTexCoord);
                             }
                             else
                             {
                                 // OBJ format uses 1-based arrays
-                                coordIndex = iTexCoord - 1;
+                                coordIndex = uint32_t(iTexCoord - 1);
                             }
 
                             if (coordIndex >= texCoords.size())
@@ -221,12 +235,12 @@ public:
                             else if (iNormal < 0)
                             {
                                 // Negative values are relative indices
-                                normIndex = uint32_t(normals.size() + iNormal);
+                                normIndex = uint32_t(ptrdiff_t(normals.size()) + iNormal);
                             }
                             else
                             {
                                 // OBJ format uses 1-based arrays
-                                normIndex = iNormal - 1;
+                                normIndex = uint32_t(iNormal - 1);
                             }
 
                             if (normIndex >= normals.size())
@@ -352,7 +366,7 @@ public:
 #endif
             }
 
-            InFile.ignore(1000, '\n');
+            InFile.ignore(1000, L'\n');
         }
 
         if (positions.empty())
@@ -366,6 +380,7 @@ public:
         // If an associated material file was found, read that in as well.
         if (*strMaterialFilename)
         {
+#ifdef WIN32
             wchar_t ext[_MAX_EXT] = {};
             _wsplitpath_s(strMaterialFilename, nullptr, 0, nullptr, 0, fname, _MAX_FNAME, ext, _MAX_EXT);
 
@@ -375,10 +390,19 @@ public:
 
             wchar_t szPath[MAX_PATH] = {};
             _wmakepath_s(szPath, MAX_PATH, drive, dir, fname, ext);
-
             HRESULT hr = LoadMTL(szPath);
             if (FAILED(hr))
                 return hr;
+#else
+            auto path = std::filesystem::path(szFileName);
+            auto mtlpath = std::filesystem::path(strMaterialFilename);
+            path.replace_filename(mtlpath.filename());
+            path.replace_extension(mtlpath.extension());
+
+            HRESULT hr = LoadMTL(path.c_str());
+            if (FAILED(hr))
+                return hr;
+#endif
         }
 
         return S_OK;
@@ -391,7 +415,7 @@ public:
         // Assumes MTL is in CWD along with OBJ
         std::wifstream InFile(szFileName);
         if (!InFile)
-            return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
+            return /* HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND) */ static_cast<HRESULT>(0x80070002L);
 
         auto curMaterial = materials.end();
 
@@ -448,18 +472,37 @@ public:
                 InFile >> r >> g >> b;
                 curMaterial->vSpecular = XMFLOAT3(r, g, b);
             }
-            else if (0 == wcscmp(strCommand.c_str(), L"d") ||
-                0 == wcscmp(strCommand.c_str(), L"Tr"))
+            else if (0 == wcscmp(strCommand.c_str(), L"Ke"))
+            {
+                // Emissive color
+                float r, g, b;
+                InFile >> r >> g >> b;
+                curMaterial->vEmissive = XMFLOAT3(r, g, b);
+                if (r > 0.f || g > 0.f || b > 0.f)
+                {
+                    curMaterial->bEmissive = true;
+                }
+            }
+            else if (0 == wcscmp(strCommand.c_str(), L"d"))
             {
                 // Alpha
-                InFile >> curMaterial->fAlpha;
+                float alpha;
+                InFile >> alpha;
+                curMaterial->fAlpha = std::min(1.f, std::max(0.f, alpha));
+            }
+            else if (0 == wcscmp(strCommand.c_str(), L"Tr"))
+            {
+                // Transparency (inverse of alpha)
+                float invAlpha;
+                InFile >> invAlpha;
+                curMaterial->fAlpha = std::min(1.f, std::max(0.f, 1.f - invAlpha));
             }
             else if (0 == wcscmp(strCommand.c_str(), L"Ns"))
             {
                 // Shininess
                 int nShininess;
                 InFile >> nShininess;
-                curMaterial->nShininess = nShininess;
+                curMaterial->nShininess = uint32_t(nShininess);
             }
             else if (0 == wcscmp(strCommand.c_str(), L"illum"))
             {
@@ -470,8 +513,32 @@ public:
             }
             else if (0 == wcscmp(strCommand.c_str(), L"map_Kd"))
             {
-                // Texture
-                InFile >> curMaterial->strTexture;
+                // Diffuse texture
+                LoadTexturePath(InFile, curMaterial->strTexture, MAX_PATH);
+            }
+            else if (0 == wcscmp(strCommand.c_str(), L"map_Ks"))
+            {
+                // Specular texture
+                LoadTexturePath(InFile, curMaterial->strSpecularTexture, MAX_PATH);
+            }
+            else if (0 == wcscmp(strCommand.c_str(), L"map_Kn")
+                     || 0 == wcscmp(strCommand.c_str(), L"norm"))
+            {
+                // Normal texture
+                LoadTexturePath(InFile, curMaterial->strNormalTexture, MAX_PATH);
+            }
+            else if (0 == wcscmp(strCommand.c_str(), L"map_Ke")
+                     || 0 == wcscmp(strCommand.c_str(), L"map_emissive"))
+            {
+                // Emissive texture
+                LoadTexturePath(InFile, curMaterial->strEmissiveTexture, MAX_PATH);
+                curMaterial->bEmissive = true;
+            }
+            else if (0 == wcscmp(strCommand.c_str(), L"map_RMA")
+                || 0 == wcscmp(strCommand.c_str(), L"map_ORM"))
+            {
+                // RMA texture
+                LoadTexturePath(InFile, curMaterial->strRMATexture, MAX_PATH);
             }
             else
             {
@@ -506,10 +573,14 @@ public:
 
         Clear();
 
+#ifdef WIN32
         wchar_t fname[_MAX_FNAME] = {};
         _wsplitpath_s(szFileName, nullptr, 0, nullptr, 0, fname, _MAX_FNAME, nullptr, 0);
-
         name = fname;
+#else
+        auto path = std::filesystem::path(szFileName);
+        name = path.filename().c_str();
+#endif
 
         Material defmat;
         wcscpy_s(defmat.strName, L"default");
@@ -517,7 +588,7 @@ public:
 
         std::ifstream vboFile(szFileName, std::ifstream::in | std::ifstream::binary);
         if (!vboFile.is_open())
-            return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
+            return /* HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND) */ static_cast<HRESULT>(0x80070002L);
 
         hasNormals = hasTexcoords = true;
 
@@ -548,9 +619,9 @@ public:
             vboFile.read(reinterpret_cast<char*>(tmp.data()), sizeof(uint16_t) * numIndices);
 
             indices.reserve(numIndices);
-            for (auto it = tmp.cbegin(); it != tmp.cend(); ++it)
+            for (const auto it : tmp)
             {
-                indices.emplace_back(*it);
+                indices.emplace_back(it);
             }
         }
 
@@ -566,23 +637,35 @@ public:
         DirectX::XMFLOAT3 vAmbient;
         DirectX::XMFLOAT3 vDiffuse;
         DirectX::XMFLOAT3 vSpecular;
+        DirectX::XMFLOAT3 vEmissive;
         uint32_t nShininess;
         float fAlpha;
 
         bool bSpecular;
+        bool bEmissive;
 
         wchar_t strName[MAX_PATH];
         wchar_t strTexture[MAX_PATH];
+        wchar_t strNormalTexture[MAX_PATH];
+        wchar_t strSpecularTexture[MAX_PATH];
+        wchar_t strEmissiveTexture[MAX_PATH];
+        wchar_t strRMATexture[MAX_PATH];
 
         Material() noexcept :
         vAmbient(0.2f, 0.2f, 0.2f),
             vDiffuse(0.8f, 0.8f, 0.8f),
             vSpecular(1.0f, 1.0f, 1.0f),
+            vEmissive(0.f, 0.f, 0.f),
             nShininess(0),
             fAlpha(1.f),
             bSpecular(false),
+            bEmissive(false),
             strName{},
-            strTexture{}
+            strTexture{},
+            strNormalTexture{},
+            strSpecularTexture{},
+            strEmissiveTexture{},
+            strRMATexture{}
         {
         }
     };
@@ -599,7 +682,7 @@ public:
     DirectX::BoundingBox    bounds;
 
 private:
-    typedef std::unordered_multimap<uint32_t, uint32_t> VertexCache;
+    using VertexCache = std::unordered_multimap<uint32_t, uint32_t>;
 
     uint32_t AddVertex(uint32_t hash, const Vertex* pVertex, VertexCache& cache)
     {
@@ -621,5 +704,44 @@ private:
         VertexCache::value_type entry(hash, index);
         cache.insert(entry);
         return index;
+    }
+
+    void LoadTexturePath(std::wifstream& InFile, _Out_writes_(maxChar) wchar_t* texture, size_t maxChar)
+    {
+        wchar_t buff[1024] = {};
+        InFile.getline(buff, 1024, L'\n');
+        InFile.putback(L'\n');
+
+        std::wstring path = buff;
+
+        // Ignore any end-of-line comment
+        size_t pos = path.find_first_of(L'#');
+        if (pos != std::wstring::npos)
+        {
+            path = path.substr(0, pos);
+        }
+
+        // Trim any trailing whitespace
+        pos = path.find_last_not_of(L" \t");
+        if (pos != std::wstring::npos)
+        {
+            path = path.substr(0, pos + 1);
+        }
+
+        // Texture path should be last element in line
+        pos = path.find_last_of(' ');
+        if (pos != std::wstring::npos)
+        {
+            path = path.substr(pos + 1);
+        }
+
+        if (!path.empty())
+        {
+#ifdef WIN32
+            wcscpy_s(texture, maxChar, path.c_str());
+#else
+            wcscpy(texture, path.c_str());
+#endif
+        }
     }
 };

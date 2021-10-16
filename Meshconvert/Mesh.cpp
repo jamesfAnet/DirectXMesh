@@ -3,10 +3,11 @@
 //
 // Mesh processing helper class
 //
-// Copyright (c) Microsoft Corporation. All rights reserved.
+// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 //
 // http://go.microsoft.com/fwlink/?LinkID=324981
+// http://go.microsoft.com/fwlink/?LinkID=512686
 //--------------------------------------------------------------------------------------
 
 #pragma warning(push)
@@ -15,13 +16,20 @@
 #define NOMINMAX
 #define NODRAWTEXT
 #define NOGDI
-#define NOBITMAP
 #define NOMCX
 #define NOSERVICE
 #define NOHELP
 #pragma warning(pop)
 
 #include "Mesh.h"
+
+#include <cstring>
+#include <cwchar>
+#include <iterator>
+#include <new>
+#include <utility>
+
+#include "SDKMesh.h"
 
 #include <DirectXPackedVector.h>
 #include <DirectXCollision.h>
@@ -30,11 +38,11 @@ using namespace DirectX;
 
 namespace
 {
-    struct handle_closer { void operator()(HANDLE h) { if (h) CloseHandle(h); } };
+    struct handle_closer { void operator()(HANDLE h) noexcept { if (h) CloseHandle(h); } };
 
-    typedef std::unique_ptr<void, handle_closer> ScopedHandle;
+    using ScopedHandle = std::unique_ptr<void, handle_closer>;
 
-    inline HANDLE safe_handle(HANDLE h) { return (h == INVALID_HANDLE_VALUE) ? nullptr : h; }
+    inline HANDLE safe_handle(HANDLE h) noexcept { return (h == INVALID_HANDLE_VALUE) ? nullptr : h; }
 
     template<typename T> inline HRESULT write_file(HANDLE hFile, const T& value)
     {
@@ -61,7 +69,7 @@ namespace
 
         if (length > 0)
         {
-            DWORD bytes = static_cast<DWORD>(sizeof(wchar_t) * length);
+            auto bytes = static_cast<DWORD>(sizeof(wchar_t) * length);
 
             if (!WriteFile(hFile, value, bytes, &bytesWritten, nullptr))
                 return HRESULT_FROM_WIN32(GetLastError());
@@ -120,7 +128,7 @@ Mesh& Mesh::operator= (Mesh&& moveFrom) noexcept
 
 
 //--------------------------------------------------------------------------------------
-void Mesh::Clear()
+void Mesh::Clear() noexcept
 {
     mnFaces = mnVerts = 0;
 
@@ -143,7 +151,7 @@ void Mesh::Clear()
 
 //--------------------------------------------------------------------------------------
 _Use_decl_annotations_
-HRESULT Mesh::SetIndexData(size_t nFaces, const uint16_t* indices, uint32_t* attributes)
+HRESULT Mesh::SetIndexData(size_t nFaces, const uint16_t* indices, const uint32_t* attributes) noexcept
 {
     if (!nFaces || !indices)
         return E_INVALIDARG;
@@ -190,7 +198,7 @@ HRESULT Mesh::SetIndexData(size_t nFaces, const uint16_t* indices, uint32_t* att
 }
 
 _Use_decl_annotations_
-HRESULT Mesh::SetIndexData(size_t nFaces, const uint32_t* indices, uint32_t* attributes)
+HRESULT Mesh::SetIndexData(size_t nFaces, const uint32_t* indices, const uint32_t* attributes) noexcept
 {
     if (!nFaces || !indices)
         return E_INVALIDARG;
@@ -227,7 +235,7 @@ HRESULT Mesh::SetIndexData(size_t nFaces, const uint32_t* indices, uint32_t* att
 
 
 //--------------------------------------------------------------------------------------
-HRESULT Mesh::SetVertexData(_Inout_ DirectX::VBReader& reader, _In_ size_t nVerts)
+HRESULT Mesh::SetVertexData(_Inout_ DirectX::VBReader& reader, _In_ size_t nVerts) noexcept
 {
     if (!nVerts)
         return E_INVALIDARG;
@@ -367,7 +375,7 @@ HRESULT Mesh::SetVertexData(_Inout_ DirectX::VBReader& reader, _In_ size_t nVert
 
 //--------------------------------------------------------------------------------------
 _Use_decl_annotations_
-HRESULT Mesh::Validate(DWORD flags, std::wstring* msgs) const
+HRESULT Mesh::Validate(DirectX::VALIDATE_FLAGS flags, std::wstring* msgs) const noexcept
 {
     if (!mnFaces || !mIndices || !mnVerts)
         return E_UNEXPECTED;
@@ -377,7 +385,7 @@ HRESULT Mesh::Validate(DWORD flags, std::wstring* msgs) const
 
 
 //--------------------------------------------------------------------------------------
-HRESULT Mesh::Clean()
+HRESULT Mesh::Clean() noexcept
 {
     if (!mnFaces || !mIndices || !mnVerts || !mPositions)
         return E_UNEXPECTED;
@@ -529,7 +537,7 @@ HRESULT Mesh::Clean()
 
 
 //--------------------------------------------------------------------------------------
-HRESULT Mesh::GenerateAdjacency(_In_ float epsilon)
+HRESULT Mesh::GenerateAdjacency(_In_ float epsilon) noexcept
 {
     if (!mnFaces || !mIndices || !mnVerts || !mPositions)
         return E_UNEXPECTED;
@@ -546,7 +554,7 @@ HRESULT Mesh::GenerateAdjacency(_In_ float epsilon)
 
 
 //--------------------------------------------------------------------------------------
-HRESULT Mesh::ComputeNormals(_In_ DWORD flags)
+HRESULT Mesh::ComputeNormals(_In_ DirectX::CNORM_FLAGS flags) noexcept
 {
     if (!mnFaces || !mIndices || !mnVerts || !mPositions)
         return E_UNEXPECTED;
@@ -560,7 +568,7 @@ HRESULT Mesh::ComputeNormals(_In_ DWORD flags)
 
 
 //--------------------------------------------------------------------------------------
-HRESULT Mesh::ComputeTangentFrame(_In_ bool bitangents)
+HRESULT Mesh::ComputeTangentFrame(_In_ bool bitangents) noexcept
 {
     if (!mnFaces || !mIndices || !mnVerts || !mPositions || !mNormals || !mTexCoords)
         return E_UNEXPECTED;
@@ -602,7 +610,7 @@ HRESULT Mesh::ComputeTangentFrame(_In_ bool bitangents)
 
 
 //--------------------------------------------------------------------------------------
-HRESULT Mesh::Optimize(bool lru)
+HRESULT Mesh::Optimize(bool lru) noexcept
 {
     if (!mnFaces || !mIndices || !mnVerts || !mPositions)
         return E_UNEXPECTED;
@@ -741,7 +749,7 @@ HRESULT Mesh::Optimize(bool lru)
 
 
 //--------------------------------------------------------------------------------------
-HRESULT Mesh::ReverseWinding()
+HRESULT Mesh::ReverseWinding() noexcept
 {
     if (!mIndices || !mnFaces)
         return E_UNEXPECTED;
@@ -758,7 +766,7 @@ HRESULT Mesh::ReverseWinding()
 
 
 //--------------------------------------------------------------------------------------
-HRESULT Mesh::InvertUTexCoord()
+HRESULT Mesh::InvertUTexCoord() noexcept
 {
     if (!mTexCoords)
         return E_UNEXPECTED;
@@ -774,7 +782,7 @@ HRESULT Mesh::InvertUTexCoord()
 
 
 //--------------------------------------------------------------------------------------
-HRESULT Mesh::InvertVTexCoord()
+HRESULT Mesh::InvertVTexCoord() noexcept
 {
     if (!mTexCoords)
         return E_UNEXPECTED;
@@ -790,7 +798,7 @@ HRESULT Mesh::InvertVTexCoord()
 
 
 //--------------------------------------------------------------------------------------
-HRESULT Mesh::ReverseHandedness()
+HRESULT Mesh::ReverseHandedness() noexcept
 {
     if (!mPositions)
         return E_UNEXPECTED;
@@ -815,7 +823,7 @@ HRESULT Mesh::ReverseHandedness()
 
 
 //--------------------------------------------------------------------------------------
-bool Mesh::Is16BitIndexBuffer() const
+bool Mesh::Is16BitIndexBuffer() const noexcept
 {
     if (!mIndices || !mnFaces)
         return false;
@@ -839,7 +847,7 @@ bool Mesh::Is16BitIndexBuffer() const
 
 
 //--------------------------------------------------------------------------------------
-std::unique_ptr<uint16_t[]> Mesh::GetIndexBuffer16() const
+std::unique_ptr<uint16_t[]> Mesh::GetIndexBuffer16() const noexcept
 {
     std::unique_ptr<uint16_t[]> ib;
 
@@ -879,7 +887,7 @@ std::unique_ptr<uint16_t[]> Mesh::GetIndexBuffer16() const
 
 
 //--------------------------------------------------------------------------------------
-HRESULT Mesh::GetVertexBuffer(_Inout_ DirectX::VBWriter& writer) const
+HRESULT Mesh::GetVertexBuffer(_Inout_ DirectX::VBWriter& writer) const noexcept
 {
     if (!mnVerts || !mPositions)
         return E_UNEXPECTED;
@@ -893,7 +901,8 @@ HRESULT Mesh::GetVertexBuffer(_Inout_ DirectX::VBWriter& writer) const
         auto e = writer.GetElement11("NORMAL", 0);
         if (e)
         {
-            hr = writer.Write(mNormals.get(), "NORMAL", 0, mnVerts);
+            bool x2bias = (e->Format == DXGI_FORMAT_R11G11B10_FLOAT);
+            hr = writer.Write(mNormals.get(), "NORMAL", 0, mnVerts, x2bias);
             if (FAILED(hr))
                 return hr;
         }
@@ -904,7 +913,8 @@ HRESULT Mesh::GetVertexBuffer(_Inout_ DirectX::VBWriter& writer) const
         auto e = writer.GetElement11("TANGENT", 0);
         if (e)
         {
-            hr = writer.Write(mTangents.get(), "TANGENT", 0, mnVerts);
+            bool x2bias = (e->Format == DXGI_FORMAT_R11G11B10_FLOAT);
+            hr = writer.Write(mTangents.get(), "TANGENT", 0, mnVerts, x2bias);
             if (FAILED(hr))
                 return hr;
         }
@@ -915,7 +925,8 @@ HRESULT Mesh::GetVertexBuffer(_Inout_ DirectX::VBWriter& writer) const
         auto e = writer.GetElement11("BINORMAL", 0);
         if (e)
         {
-            hr = writer.Write(mBiTangents.get(), "BINORMAL", 0, mnVerts);
+            bool x2bias = (e->Format == DXGI_FORMAT_R11G11B10_FLOAT);
+            hr = writer.Write(mBiTangents.get(), "BINORMAL", 0, mnVerts, x2bias);
             if (FAILED(hr))
                 return hr;
         }
@@ -1000,7 +1011,7 @@ namespace VBO
 
 //--------------------------------------------------------------------------------------
 _Use_decl_annotations_
-HRESULT Mesh::ExportToVBO(const wchar_t* szFileName) const
+HRESULT Mesh::ExportToVBO(const wchar_t* szFileName) const noexcept
 {
     using namespace VBO;
 
@@ -1058,9 +1069,11 @@ HRESULT Mesh::ExportToVBO(const wchar_t* szFileName) const
 
     // Write header and data
 #if (_WIN32_WINNT >= _WIN32_WINNT_WIN8)
-    ScopedHandle hFile(safe_handle(CreateFile2(szFileName, GENERIC_WRITE, 0, CREATE_ALWAYS, nullptr)));
+    ScopedHandle hFile(safe_handle(CreateFile2(szFileName,
+        GENERIC_WRITE, 0, CREATE_ALWAYS, nullptr)));
 #else
-    ScopedHandle hFile(safe_handle(CreateFileW(szFileName, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, 0, nullptr)));
+    ScopedHandle hFile(safe_handle(CreateFileW(szFileName,
+        GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr)));
 #endif
     if (!hFile)
         return HRESULT_FROM_WIN32(GetLastError());
@@ -1069,7 +1082,7 @@ HRESULT Mesh::ExportToVBO(const wchar_t* szFileName) const
     if (FAILED(hr))
         return hr;
 
-    DWORD vertSize = static_cast<DWORD>(sizeof(vertex_t) * header.numVertices);
+    auto vertSize = static_cast<DWORD>(sizeof(vertex_t) * header.numVertices);
 
     DWORD bytesWritten;
     if (!WriteFile(hFile.get(), vb.get(), vertSize, &bytesWritten, nullptr))
@@ -1078,7 +1091,7 @@ HRESULT Mesh::ExportToVBO(const wchar_t* szFileName) const
     if (bytesWritten != vertSize)
         return E_FAIL;
 
-    DWORD indexSize = static_cast<DWORD>(sizeof(uint16_t) * header.numIndices);
+    auto indexSize = static_cast<DWORD>(sizeof(uint16_t) * header.numIndices);
 
     if (!WriteFile(hFile.get(), ib.get(), indexSize, &bytesWritten, nullptr))
         return HRESULT_FROM_WIN32(GetLastError());
@@ -1092,7 +1105,7 @@ HRESULT Mesh::ExportToVBO(const wchar_t* szFileName) const
 
 //--------------------------------------------------------------------------------------
 _Use_decl_annotations_
-HRESULT Mesh::CreateFromVBO(const wchar_t* szFileName, std::unique_ptr<Mesh>& result)
+HRESULT Mesh::CreateFromVBO(const wchar_t* szFileName, std::unique_ptr<Mesh>& result) noexcept
 {
     using namespace VBO;
 
@@ -1151,7 +1164,7 @@ HRESULT Mesh::CreateFromVBO(const wchar_t* szFileName, std::unique_ptr<Mesh>& re
     if (!vb || !ib)
         return E_OUTOFMEMORY;
 
-    DWORD vertSize = static_cast<DWORD>(sizeof(vertex_t) * header.numVertices);
+    auto vertSize = static_cast<DWORD>(sizeof(vertex_t) * header.numVertices);
 
     if (!ReadFile(hFile.get(), vb.get(), vertSize, &bytesRead, nullptr))
     {
@@ -1161,7 +1174,7 @@ HRESULT Mesh::CreateFromVBO(const wchar_t* szFileName, std::unique_ptr<Mesh>& re
     if (bytesRead != vertSize)
         return E_FAIL;
 
-    DWORD indexSize = static_cast<DWORD>(sizeof(uint16_t) * header.numIndices);
+    auto indexSize = static_cast<DWORD>(sizeof(uint16_t) * header.numIndices);
 
     if (!ReadFile(hFile.get(), ib.get(), indexSize, &bytesRead, nullptr))
     {
@@ -1370,7 +1383,7 @@ static_assert(sizeof(VSD3DStarter::Keyframe) == 72, "CMO Mesh structure size inc
 
 //--------------------------------------------------------------------------------------
 _Use_decl_annotations_
-HRESULT Mesh::ExportToCMO(const wchar_t* szFileName, size_t nMaterials, const Material* materials) const
+HRESULT Mesh::ExportToCMO(const wchar_t* szFileName, size_t nMaterials, const Material* materials) const noexcept
 {
     using namespace VSD3DStarter;
 
@@ -1463,9 +1476,11 @@ HRESULT Mesh::ExportToCMO(const wchar_t* szFileName, size_t nMaterials, const Ma
 
     // Create CMO file
 #if (_WIN32_WINNT >= _WIN32_WINNT_WIN8)
-    ScopedHandle hFile(safe_handle(CreateFile2(szFileName, GENERIC_WRITE, 0, CREATE_ALWAYS, nullptr)));
+    ScopedHandle hFile(safe_handle(CreateFile2(szFileName,
+        GENERIC_WRITE, 0, CREATE_ALWAYS, nullptr)));
 #else
-    ScopedHandle hFile(safe_handle(CreateFileW(szFileName, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, 0, nullptr)));
+    ScopedHandle hFile(safe_handle(CreateFileW(szFileName,
+        GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr)));
 #endif
     if (!hFile)
         return HRESULT_FROM_WIN32(GetLastError());
@@ -1597,22 +1612,22 @@ HRESULT Mesh::ExportToCMO(const wchar_t* szFileName, size_t nMaterials, const Ma
             return hr;
 
         size_t startIndex = 0;
-        for (auto it = subsets.cbegin(); it != subsets.end(); ++it)
+        for (const auto& it : subsets)
         {
             SubMesh smesh;
-            smesh.MaterialIndex = mAttributes[it->first];
+            smesh.MaterialIndex = mAttributes[it.first];
             if (smesh.MaterialIndex >= nMaterials)
                 smesh.MaterialIndex = 0;
 
             smesh.IndexBufferIndex = 0;
             smesh.VertexBufferIndex = 0;
             smesh.StartIndex = static_cast<UINT>(startIndex);
-            smesh.PrimCount = static_cast<UINT>(it->second);
+            smesh.PrimCount = static_cast<UINT>(it.second);
             hr = write_file(hFile.get(), smesh);
             if (FAILED(hr))
                 return hr;
 
-            if ((startIndex + (it->second * 3)) > mnFaces * 3)
+            if ((startIndex + (it.second * 3)) > mnFaces * 3)
                 return E_FAIL;
 
             startIndex += static_cast<size_t>(uint64_t(smesh.PrimCount) * 3);
@@ -1647,7 +1662,7 @@ HRESULT Mesh::ExportToCMO(const wchar_t* szFileName, size_t nMaterials, const Ma
     if (FAILED(hr))
         return hr;
 
-    DWORD indexSize = static_cast<DWORD>(sizeof(uint16_t) * nIndices);
+    auto indexSize = static_cast<DWORD>(sizeof(uint16_t) * nIndices);
 
     DWORD bytesWritten;
     if (!WriteFile(hFile.get(), ib.get(), indexSize, &bytesWritten, nullptr))
@@ -1667,7 +1682,7 @@ HRESULT Mesh::ExportToCMO(const wchar_t* szFileName, size_t nMaterials, const Ma
     if (FAILED(hr))
         return hr;
 
-    DWORD vertSize = static_cast<DWORD>(sizeof(Vertex) * mnVerts);
+    auto vertSize = static_cast<DWORD>(sizeof(Vertex) * mnVerts);
 
     if (!WriteFile(hFile.get(), vb.get(), vertSize, &bytesWritten, nullptr))
         return HRESULT_FROM_WIN32(GetLastError());
@@ -1688,7 +1703,7 @@ HRESULT Mesh::ExportToCMO(const wchar_t* szFileName, size_t nMaterials, const Ma
         if (FAILED(hr))
             return hr;
 
-        DWORD skinVertSize = static_cast<DWORD>(sizeof(SkinningVertex) * mnVerts);
+        auto skinVertSize = static_cast<DWORD>(sizeof(SkinningVertex) * mnVerts);
 
         if (!WriteFile(hFile.get(), vbSkin.get(), skinVertSize, &bytesWritten, nullptr))
             return HRESULT_FROM_WIN32(GetLastError());
@@ -1742,350 +1757,14 @@ HRESULT Mesh::ExportToCMO(const wchar_t* szFileName, size_t nMaterials, const Ma
 // SDKMESH
 //======================================================================================
 
-//--------------------------------------------------------------------------------------
-// SDKMESH format is generated by the legacy DirectX SDK's Content Exporter and
-// originally rendered by the DXUT helper class SDKMesh
-//
-// http://go.microsoft.com/fwlink/?LinkId=226208
-//--------------------------------------------------------------------------------------
-namespace DXUT
-{
-    // .SDKMESH files
-
-    // SDKMESH_HEADER
-    // SDKMESH_VERTEX_BUFFER_HEADER header->VertexStreamHeadersOffset
-    // SDKMESH_INDEX_BUFFER_HEADER  header->IndexStreamHeadersOffset
-    // SDKMESH_MESH                 header->MeshDataOffset
-    // SDKMESH_SUBSET               header->SubsetDataOffset
-    // SDKMESH_FRAME                header->FrameDataOffset
-    // SDKMESH_MATERIAL             header->MaterialDataOffset
-    // [header->NonBufferDataSize]
-    // { [ header->NumVertexBuffers]
-    //      VB data
-    // }
-    // { [ header->NumIndexBuffers]
-    //      IB data
-    // }
-
-
-    // .SDDKANIM files
-
-    // SDKANIMATION_FILE_HEADER
-    // BYTE[] - Length of fileheader->AnimationDataSize
-
-    // .SDKMESH uses Direct3D 9 decls, but only a subset of these is ever generated by the legacy DirectX SDK Content Exporter
-
-    // D3DDECLUSAGE_POSITION / D3DDECLTYPE_FLOAT3
-    // (D3DDECLUSAGE_BLENDWEIGHT / D3DDECLTYPE_UBYTE4N
-    // D3DDECLUSAGE_BLENDINDICES / D3DDECLTYPE_UBYTE4)?
-    // (D3DDECLUSAGE_NORMAL / D3DDECLTYPE_FLOAT3 or D3DDECLTYPE_FLOAT16_4)?
-    // (D3DDECLUSAGE_COLOR / D3DDECLTYPE_D3DCOLOR)?
-    // (D3DDECLUSAGE_TEXCOORD / D3DDECLTYPE_FLOAT1, D3DDECLTYPE_FLOAT2 or D3DDECLTYPE_FLOAT16_2, D3DDECLTYPE_FLOAT3 or D3DDECLTYPE_FLOAT16_4, D3DDECLTYPE_FLOAT4 or D3DDECLTYPE_FLOAT16_4)*
-    // (D3DDECLUSAGE_TANGENT / D3DDECLTYPE_FLOAT3 or D3DDECLTYPE_FLOAT16_4)?
-    // (D3DDECLUSAGE_BINORMAL / D3DDECLTYPE_FLOAT3 or D3DDECLTYPE_FLOAT16_4)?
-
-    enum D3DDECLUSAGE
-    {
-        D3DDECLUSAGE_POSITION = 0,
-        D3DDECLUSAGE_BLENDWEIGHT = 1,
-        D3DDECLUSAGE_BLENDINDICES = 2,
-        D3DDECLUSAGE_NORMAL = 3,
-        D3DDECLUSAGE_TEXCOORD = 5,
-        D3DDECLUSAGE_TANGENT = 6,
-        D3DDECLUSAGE_BINORMAL = 7,
-        D3DDECLUSAGE_COLOR = 10,
-    };
-
-    enum D3DDECLTYPE
-    {
-        D3DDECLTYPE_FLOAT1 = 0,  // 1D float expanded to (value, 0., 0., 1.)
-        D3DDECLTYPE_FLOAT2 = 1,  // 2D float expanded to (value, value, 0., 1.)
-        D3DDECLTYPE_FLOAT3 = 2,  // 3D float expanded to (value, value, value, 1.)
-        D3DDECLTYPE_FLOAT4 = 3,  // 4D float
-        D3DDECLTYPE_D3DCOLOR = 4,  // 4D packed unsigned bytes mapped to 0. to 1. range
-        // Input is in D3DCOLOR format (ARGB) expanded to (R, G, B, A)
-        D3DDECLTYPE_UBYTE4 = 5,  // 4D unsigned byte
-        D3DDECLTYPE_UBYTE4N = 8,  // Each of 4 bytes is normalized by dividing to 255.0
-        D3DDECLTYPE_DEC3N = 14,  // 3D signed 10 10 10 format normalized and expanded to (v[0]/511.0, v[1]/511.0, v[2]/511.0, 1)
-        D3DDECLTYPE_FLOAT16_2 = 15,  // Two 16-bit floating point values, expanded to (value, value, 0, 1)
-        D3DDECLTYPE_FLOAT16_4 = 16,  // Four 16-bit floating point values
-
-        D3DDECLTYPE_UNUSED = 17,  // When the type field in a decl is unused.
-    };
-
-#pragma pack(push,4)
-
-    struct D3DVERTEXELEMENT9
-    {
-        WORD    Stream;     // Stream index
-        WORD    Offset;     // Offset in the stream in bytes
-        BYTE    Type;       // Data type
-        BYTE    Method;     // Processing method
-        BYTE    Usage;      // Semantics
-        BYTE    UsageIndex; // Semantic index
-    };
-
-#pragma pack(pop)
-
-    //--------------------------------------------------------------------------------------
-    // Hard Defines for the various structures
-    //--------------------------------------------------------------------------------------
-    const uint32_t SDKMESH_FILE_VERSION = 101;
-    const uint32_t MAX_VERTEX_ELEMENTS = 32;
-    const uint32_t MAX_VERTEX_STREAMS = 16;
-    const uint32_t MAX_FRAME_NAME = 100;
-    const uint32_t MAX_MESH_NAME = 100;
-    const uint32_t MAX_SUBSET_NAME = 100;
-    const uint32_t MAX_MATERIAL_NAME = 100;
-    const uint32_t MAX_TEXTURE_NAME = MAX_PATH;
-    const uint32_t MAX_MATERIAL_PATH = MAX_PATH;
-    const uint32_t INVALID_FRAME = uint32_t(-1);
-    const uint32_t INVALID_MESH = uint32_t(-1);
-    const uint32_t INVALID_MATERIAL = uint32_t(-1);
-    const uint32_t INVALID_SUBSET = uint32_t(-1);
-    const uint32_t INVALID_ANIMATION_DATA = uint32_t(-1);
-    const uint32_t INVALID_SAMPLER_SLOT = uint32_t(-1);
-    const uint32_t ERROR_RESOURCE_VALUE = 1;
-
-    template<typename TYPE> bool IsErrorResource(TYPE data)
-    {
-        if ((TYPE)ERROR_RESOURCE_VALUE == data)
-            return true;
-        return false;
-    }
-
-    //--------------------------------------------------------------------------------------
-    // Enumerated Types.  These will have mirrors in both D3D9 and D3D11
-    //--------------------------------------------------------------------------------------
-    enum SDKMESH_PRIMITIVE_TYPE
-    {
-        PT_TRIANGLE_LIST = 0,
-        PT_TRIANGLE_STRIP,
-        PT_LINE_LIST,
-        PT_LINE_STRIP,
-        PT_POINT_LIST,
-        PT_TRIANGLE_LIST_ADJ,
-        PT_TRIANGLE_STRIP_ADJ,
-        PT_LINE_LIST_ADJ,
-        PT_LINE_STRIP_ADJ,
-        PT_QUAD_PATCH_LIST,
-        PT_TRIANGLE_PATCH_LIST,
-    };
-
-    enum SDKMESH_INDEX_TYPE
-    {
-        IT_16BIT = 0,
-        IT_32BIT,
-    };
-
-    enum FRAME_TRANSFORM_TYPE
-    {
-        FTT_RELATIVE = 0,
-        FTT_ABSOLUTE,		//This is not currently used but is here to support absolute transformations in the future
-    };
-
-    //--------------------------------------------------------------------------------------
-    // Structures.
-    //--------------------------------------------------------------------------------------
-#pragma pack(push,8)
-
-    struct SDKMESH_HEADER
-    {
-        //Basic Info and sizes
-        UINT Version;
-        BYTE IsBigEndian;
-        UINT64 HeaderSize;
-        UINT64 NonBufferDataSize;
-        UINT64 BufferDataSize;
-
-        //Stats
-        UINT NumVertexBuffers;
-        UINT NumIndexBuffers;
-        UINT NumMeshes;
-        UINT NumTotalSubsets;
-        UINT NumFrames;
-        UINT NumMaterials;
-
-        //Offsets to Data
-        UINT64 VertexStreamHeadersOffset;
-        UINT64 IndexStreamHeadersOffset;
-        UINT64 MeshDataOffset;
-        UINT64 SubsetDataOffset;
-        UINT64 FrameDataOffset;
-        UINT64 MaterialDataOffset;
-    };
-
-    struct SDKMESH_VERTEX_BUFFER_HEADER
-    {
-        UINT64 NumVertices;
-        UINT64 SizeBytes;
-        UINT64 StrideBytes;
-        D3DVERTEXELEMENT9 Decl[MAX_VERTEX_ELEMENTS];
-        union
-        {
-            UINT64 DataOffset;
-            ID3D11Buffer* pVB11;
-        };
-    };
-
-    struct SDKMESH_INDEX_BUFFER_HEADER
-    {
-        UINT64 NumIndices;
-        UINT64 SizeBytes;
-        UINT IndexType;
-        union
-        {
-            UINT64 DataOffset;
-            ID3D11Buffer* pIB11;
-        };
-    };
-
-    struct SDKMESH_MESH
-    {
-        char Name[MAX_MESH_NAME];
-        BYTE NumVertexBuffers;
-        UINT VertexBuffers[MAX_VERTEX_STREAMS];
-        UINT IndexBuffer;
-        UINT NumSubsets;
-        UINT NumFrameInfluences; //aka bones
-
-        DirectX::XMFLOAT3 BoundingBoxCenter;
-        DirectX::XMFLOAT3 BoundingBoxExtents;
-
-        union
-        {
-            UINT64 SubsetOffset;
-            INT* pSubsets;
-        };
-        union
-        {
-            UINT64 FrameInfluenceOffset;
-            UINT* pFrameInfluences;
-        };
-    };
-
-    struct SDKMESH_SUBSET
-    {
-        char Name[MAX_SUBSET_NAME];
-        UINT MaterialID;
-        UINT PrimitiveType;
-        UINT64 IndexStart;
-        UINT64 IndexCount;
-        UINT64 VertexStart;
-        UINT64 VertexCount;
-    };
-
-    struct SDKMESH_FRAME
-    {
-        char Name[MAX_FRAME_NAME];
-        UINT Mesh;
-        UINT ParentFrame;
-        UINT ChildFrame;
-        UINT SiblingFrame;
-        DirectX::XMFLOAT4X4 Matrix;
-        UINT AnimationDataIndex;		//Used to index which set of keyframes transforms this frame
-    };
-
-    struct SDKMESH_MATERIAL
-    {
-        char    Name[MAX_MATERIAL_NAME];
-
-        // Use MaterialInstancePath
-        char    MaterialInstancePath[MAX_MATERIAL_PATH];
-
-        // Or fall back to d3d8-type materials
-        char    DiffuseTexture[MAX_TEXTURE_NAME];
-        char    NormalTexture[MAX_TEXTURE_NAME];
-        char    SpecularTexture[MAX_TEXTURE_NAME];
-
-        DirectX::XMFLOAT4 Diffuse;
-        DirectX::XMFLOAT4 Ambient;
-        DirectX::XMFLOAT4 Specular;
-        DirectX::XMFLOAT4 Emissive;
-        FLOAT Power;
-
-        union
-        {
-            UINT64 Force64_1;			//Force the union to 64bits
-            ID3D11Texture2D* pDiffuseTexture11;
-        };
-        union
-        {
-            UINT64 Force64_2;			//Force the union to 64bits
-            ID3D11Texture2D* pNormalTexture11;
-        };
-        union
-        {
-            UINT64 Force64_3;			//Force the union to 64bits
-            ID3D11Texture2D* pSpecularTexture11;
-        };
-
-        union
-        {
-            UINT64 Force64_4;			//Force the union to 64bits
-            ID3D11ShaderResourceView* pDiffuseRV11;
-        };
-        union
-        {
-            UINT64 Force64_5;		    //Force the union to 64bits
-            ID3D11ShaderResourceView* pNormalRV11;
-        };
-        union
-        {
-            UINT64 Force64_6;			//Force the union to 64bits
-            ID3D11ShaderResourceView* pSpecularRV11;
-        };
-    };
-
-    struct SDKANIMATION_FILE_HEADER
-    {
-        UINT Version;
-        BYTE IsBigEndian;
-        UINT FrameTransformType;
-        UINT NumFrames;
-        UINT NumAnimationKeys;
-        UINT AnimationFPS;
-        UINT64 AnimationDataSize;
-        UINT64 AnimationDataOffset;
-    };
-
-    struct SDKANIMATION_DATA
-    {
-        DirectX::XMFLOAT3 Translation;
-        DirectX::XMFLOAT4 Orientation;
-        DirectX::XMFLOAT3 Scaling;
-    };
-
-    struct SDKANIMATION_FRAME_DATA
-    {
-        char FrameName[MAX_FRAME_NAME];
-        union
-        {
-            UINT64 DataOffset;
-            SDKANIMATION_DATA* pAnimationData;
-        };
-    };
-
-#pragma pack(pop)
-
-} // namespace
-
-static_assert(sizeof(DXUT::D3DVERTEXELEMENT9) == 8, "Direct3D9 Decl structure size incorrect");
-static_assert(sizeof(DXUT::SDKMESH_HEADER) == 104, "SDK Mesh structure size incorrect");
-static_assert(sizeof(DXUT::SDKMESH_VERTEX_BUFFER_HEADER) == 288, "SDK Mesh structure size incorrect");
-static_assert(sizeof(DXUT::SDKMESH_INDEX_BUFFER_HEADER) == 32, "SDK Mesh structure size incorrect");
-static_assert(sizeof(DXUT::SDKMESH_MESH) == 224, "SDK Mesh structure size incorrect");
-static_assert(sizeof(DXUT::SDKMESH_SUBSET) == 144, "SDK Mesh structure size incorrect");
-static_assert(sizeof(DXUT::SDKMESH_FRAME) == 184, "SDK Mesh structure size incorrect");
-static_assert(sizeof(DXUT::SDKMESH_MATERIAL) == 1256, "SDK Mesh structure size incorrect");
-static_assert(sizeof(DXUT::SDKANIMATION_FILE_HEADER) == 40, "SDK Mesh structure size incorrect");
-static_assert(sizeof(DXUT::SDKANIMATION_DATA) == 40, "SDK Mesh structure size incorrect");
-static_assert(sizeof(DXUT::SDKANIMATION_FRAME_DATA) == 112, "SDK Mesh structure size incorrect");
-
-
-//--------------------------------------------------------------------------------------
 _Use_decl_annotations_
-HRESULT Mesh::ExportToSDKMESH(const wchar_t* szFileName, size_t nMaterials, const Material* materials, bool force32bit) const
+HRESULT Mesh::ExportToSDKMESH(const wchar_t* szFileName,
+    size_t nMaterials, const Material* materials,
+    bool force32bit,
+    bool version2,
+    DXGI_FORMAT normalFormat,
+    DXGI_FORMAT uvFormat,
+    DXGI_FORMAT colorFormat) const noexcept
 {
     using namespace DXUT;
 
@@ -2127,7 +1806,66 @@ HRESULT Mesh::ExportToSDKMESH(const wchar_t* szFileName, size_t nMaterials, cons
         { 0xFF, 0, D3DDECLTYPE_UNUSED, 0, 0, 0 },
     };
 
-    static_assert((_countof(s_elements) + 1) == _countof(s_decls), "InputLayouts and Vertex Decls disagree");
+    static_assert((std::size(s_elements) + 1) == std::size(s_decls), "InputLayouts and Vertex Decls disagree");
+
+    uint8_t normalType;
+    size_t normalStride;
+    switch (normalFormat)
+    {
+    case DXGI_FORMAT_R16G16B16A16_FLOAT:
+        normalType = D3DDECLTYPE_FLOAT16_4; normalStride = sizeof(PackedVector::XMHALF4);
+        break;
+
+    case DXGI_FORMAT_R11G11B10_FLOAT: // Biased in GetVertexBuffer
+        normalType = D3DDECLTYPE_DXGI_R11G11B10_FLOAT; normalStride = sizeof(UINT);
+        break;
+
+    default:
+        normalFormat = DXGI_FORMAT_R32G32B32_FLOAT; normalType = D3DDECLTYPE_FLOAT3; normalStride = sizeof(XMFLOAT3);
+        break;
+    }
+
+    uint8_t uvType;
+    size_t uvStride;
+    switch (uvFormat)
+    {
+    case DXGI_FORMAT_R16G16_FLOAT:
+        uvType = D3DDECLTYPE_FLOAT16_2; uvStride = sizeof(PackedVector::XMHALF2);
+        break;
+
+    default:
+        uvFormat = DXGI_FORMAT_R32G32_FLOAT; uvType = D3DDECLTYPE_FLOAT2; uvStride = sizeof(XMFLOAT2);
+        break;
+    }
+
+    uint8_t colorType;
+    size_t colorStride;
+    switch (colorFormat)
+    {
+    case DXGI_FORMAT_R32G32B32A32_FLOAT:
+        colorType = D3DDECLTYPE_FLOAT4; colorStride = sizeof(XMFLOAT4);
+        break;
+
+    case DXGI_FORMAT_R16G16B16A16_FLOAT:
+        colorType = D3DDECLTYPE_FLOAT16_4; colorStride = sizeof(PackedVector::XMHALF4);
+        break;
+
+    case DXGI_FORMAT_R11G11B10_FLOAT:
+        colorType = D3DDECLTYPE_DXGI_R11G11B10_FLOAT; colorStride = sizeof(UINT);
+        break;
+
+    case DXGI_FORMAT_R10G10B10A2_UNORM:
+        colorType = D3DDECLTYPE_DXGI_R10G10B10A2_UNORM; colorStride = sizeof(UINT);
+        break;
+
+    case DXGI_FORMAT_R8G8B8A8_UNORM:
+        colorType = D3DDECLTYPE_UBYTE4N; colorStride = sizeof(UINT);
+        break;
+
+    default:
+        colorFormat = DXGI_FORMAT_B8G8R8A8_UNORM; colorType = D3DDECLTYPE_D3DCOLOR; colorStride = sizeof(UINT);
+        break;
+    }
 
     SDKMESH_VERTEX_BUFFER_HEADER vbHeader = {};
     vbHeader.NumVertices = mnVerts;
@@ -2159,50 +1897,60 @@ HRESULT Mesh::ExportToSDKMESH(const wchar_t* szFileName, size_t nMaterials, cons
     if (mNormals)
     {
         vbHeader.Decl[nDecl] = s_decls[1];
+        vbHeader.Decl[nDecl].Type = normalType;
         vbHeader.Decl[nDecl].Offset = static_cast<WORD>(stride);
         inputLayout[nDecl] = s_elements[1];
+        inputLayout[nDecl].Format = normalFormat;
         ++nDecl;
-        stride += sizeof(XMFLOAT3);
+        stride += normalStride;
     }
 
     if (mColors)
     {
         vbHeader.Decl[nDecl] = s_decls[2];
+        vbHeader.Decl[nDecl].Type = colorType;
         vbHeader.Decl[nDecl].Offset = static_cast<WORD>(stride);
         inputLayout[nDecl] = s_elements[2];
+        inputLayout[nDecl].Format = colorFormat;
         ++nDecl;
-        stride += sizeof(UINT);
+        stride += colorStride;
     }
 
     if (mTexCoords)
     {
         vbHeader.Decl[nDecl] = s_decls[5];
+        vbHeader.Decl[nDecl].Type = uvType;
         vbHeader.Decl[nDecl].Offset = static_cast<WORD>(stride);
         inputLayout[nDecl] = s_elements[5];
+        inputLayout[nDecl].Format = uvFormat;
         ++nDecl;
-        stride += sizeof(XMFLOAT2);
+        stride += uvStride;
     }
 
     if (mTangents)
     {
         vbHeader.Decl[nDecl] = s_decls[3];
+        vbHeader.Decl[nDecl].Type = normalType;
         vbHeader.Decl[nDecl].Offset = static_cast<WORD>(stride);
         inputLayout[nDecl] = s_elements[3];
+        inputLayout[nDecl].Format = normalFormat;
         ++nDecl;
-        stride += sizeof(XMFLOAT3);
+        stride += normalStride;
     }
 
     if (mBiTangents)
     {
         vbHeader.Decl[nDecl] = s_decls[4];
+        vbHeader.Decl[nDecl].Type = normalType;
         vbHeader.Decl[nDecl].Offset = static_cast<WORD>(stride);
         inputLayout[nDecl] = s_elements[4];
+        inputLayout[nDecl].Format = normalFormat;
         ++nDecl;
-        stride += sizeof(XMFLOAT3);
+        stride += normalStride;
     }
 
     assert(nDecl < MAX_VERTEX_ELEMENTS);
-    vbHeader.Decl[nDecl] = s_decls[_countof(s_decls) - 1];
+    vbHeader.Decl[nDecl] = s_decls[std::size(s_decls) - 1];
 
     // Build vertex buffer
     std::unique_ptr<uint8_t> vb(new (std::nothrow) uint8_t[mnVerts * stride]);
@@ -2250,7 +1998,130 @@ HRESULT Mesh::ExportToSDKMESH(const wchar_t* szFileName, size_t nMaterials, cons
 
     // Build materials buffer
     std::unique_ptr<SDKMESH_MATERIAL[]> mats;
-    if (!nMaterials)
+    if (version2)
+    {
+        if (!nMaterials)
+        {
+            mats.reset(new (std::nothrow) SDKMESH_MATERIAL[1]);
+            if (!mats)
+                return E_OUTOFMEMORY;
+
+            auto mat2 = reinterpret_cast<SDKMESH_MATERIAL_V2*>(mats.get());
+            memset(mat2, 0, sizeof(SDKMESH_MATERIAL_V2));
+
+            strcpy_s(mat2->Name, "default");
+            mat2->Alpha = 1.f;
+        }
+        else
+        {
+            mats.reset(new (std::nothrow) SDKMESH_MATERIAL[nMaterials]);
+            if (!mats)
+                return E_OUTOFMEMORY;
+
+            for (size_t j = 0; j < nMaterials; ++j)
+            {
+                auto m0 = &materials[j];
+                auto m2 = reinterpret_cast<SDKMESH_MATERIAL_V2*>(&mats[j]);
+
+                memset(m2, 0, sizeof(SDKMESH_MATERIAL_V2));
+
+                if (!m0->name.empty())
+                {
+                    int result = WideCharToMultiByte(CP_UTF8, WC_NO_BEST_FIT_CHARS,
+                        m0->name.c_str(), -1,
+                        m2->Name, MAX_MATERIAL_NAME, nullptr, FALSE);
+                    if (!result)
+                    {
+                        *m2->Name = 0;
+                    }
+                }
+
+                m2->Alpha = m0->alpha;
+
+                if (!m0->texture.empty())
+                {
+                    int result = WideCharToMultiByte(CP_UTF8, WC_NO_BEST_FIT_CHARS,
+                        m0->texture.c_str(), -1,
+                        m2->AlbedoTexture, MAX_TEXTURE_NAME, nullptr, FALSE);
+                    if (!result)
+                    {
+                        *m2->AlbedoTexture = 0;
+                    }
+                }
+
+                // Derive other PBR texture names from base texture
+                {
+                    char drive[_MAX_DRIVE] = {};
+                    char dir[MAX_PATH] = {};
+                    char fname[_MAX_FNAME] = {};
+                    char ext[_MAX_EXT] = {};
+                    _splitpath_s(m2->AlbedoTexture, drive, dir, fname, ext);
+
+                    std::string basename = fname;
+                    size_t pos = basename.find_last_of('_');
+                    if (pos != std::string::npos)
+                    {
+                        basename = basename.substr(0, pos);
+                    }
+
+                    if (!basename.empty())
+                    {
+                        strcpy_s(fname, basename.c_str());
+                        strcat_s(fname, "_normal");
+                        _makepath_s(m2->NormalTexture, drive, dir, fname, ext);
+
+                        strcpy_s(fname, basename.c_str());
+                        strcat_s(fname, "_occlusionRoughnessMetallic");
+                        _makepath_s(m2->RMATexture, drive, dir, fname, ext);
+
+                        if (m0->emissiveColor.x > 0 || m0->emissiveColor.y > 0 || m0->emissiveColor.z > 0)
+                        {
+                            strcpy_s(fname, basename.c_str());
+                            strcat_s(fname, "_emissive");
+                            _makepath_s(m2->EmissiveTexture, drive, dir, fname, ext);
+                        }
+                    }
+                }
+
+                // Allow normal texture material property to override derived name
+                if (!m0->normalTexture.empty())
+                {
+                    int result = WideCharToMultiByte(CP_UTF8, WC_NO_BEST_FIT_CHARS,
+                        m0->normalTexture.c_str(), -1,
+                        m2->NormalTexture, MAX_TEXTURE_NAME, nullptr, FALSE);
+                    if (!result)
+                    {
+                        *m2->NormalTexture = 0;
+                    }
+                }
+
+                // Allow emissive texture material property to override drived name
+                if (!m0->emissiveTexture.empty())
+                {
+                    int result = WideCharToMultiByte(CP_UTF8, WC_NO_BEST_FIT_CHARS,
+                        m0->emissiveTexture.c_str(), -1,
+                        m2->EmissiveTexture, MAX_TEXTURE_NAME, nullptr, FALSE);
+                    if (!result)
+                    {
+                        *m2->EmissiveTexture = 0;
+                    }
+                }
+
+                // Allow RMA texture material property to override drived name
+                if (!m0->rmaTexture.empty())
+                {
+                    int result = WideCharToMultiByte(CP_UTF8, WC_NO_BEST_FIT_CHARS,
+                        m0->rmaTexture.c_str(), -1,
+                        m2->RMATexture, MAX_TEXTURE_NAME, nullptr, FALSE);
+                    if (!result)
+                    {
+                        *m2->RMATexture = 0;
+                    }
+                }
+            }
+        }
+    }
+    else if (!nMaterials)
     {
         mats.reset(new (std::nothrow) SDKMESH_MATERIAL[1]);
         if (!mats)
@@ -2276,20 +2147,48 @@ HRESULT Mesh::ExportToSDKMESH(const wchar_t* szFileName, size_t nMaterials, cons
 
             memset(m, 0, sizeof(SDKMESH_MATERIAL));
 
-            int result = WideCharToMultiByte(CP_UTF8, WC_NO_BEST_FIT_CHARS,
-                m0->name.c_str(), -1,
-                m->Name, MAX_MATERIAL_NAME, nullptr, FALSE);
-            if (!result)
+            if (!m0->name.empty())
             {
-                *m->Name = 0;
+                int result = WideCharToMultiByte(CP_UTF8, WC_NO_BEST_FIT_CHARS,
+                    m0->name.c_str(), -1,
+                    m->Name, MAX_MATERIAL_NAME, nullptr, FALSE);
+                if (!result)
+                {
+                    *m->Name = 0;
+                }
             }
 
-            result = WideCharToMultiByte(CP_UTF8, WC_NO_BEST_FIT_CHARS,
-                m0->texture.c_str(), -1,
-                m->DiffuseTexture, MAX_TEXTURE_NAME, nullptr, FALSE);
-            if (!result)
+            if (!m0->texture.empty())
             {
-                *m->DiffuseTexture = 0;
+                int result = WideCharToMultiByte(CP_UTF8, WC_NO_BEST_FIT_CHARS,
+                    m0->texture.c_str(), -1,
+                    m->DiffuseTexture, MAX_TEXTURE_NAME, nullptr, FALSE);
+                if (!result)
+                {
+                    *m->DiffuseTexture = 0;
+                }
+            }
+
+            if (!m0->normalTexture.empty())
+            {
+                int result = WideCharToMultiByte(CP_UTF8, WC_NO_BEST_FIT_CHARS,
+                    m0->normalTexture.c_str(), -1,
+                    m->NormalTexture, MAX_TEXTURE_NAME, nullptr, FALSE);
+                if (!result)
+                {
+                    *m->NormalTexture = 0;
+                }
+            }
+
+            if (!m0->specularTexture.empty())
+            {
+                int result = WideCharToMultiByte(CP_UTF8, WC_NO_BEST_FIT_CHARS,
+                    m0->specularTexture.c_str(), -1,
+                    m->SpecularTexture, MAX_TEXTURE_NAME, nullptr, FALSE);
+                if (!result)
+                {
+                    *m->SpecularTexture = 0;
+                }
             }
 
             m->Diffuse.x = m0->diffuseColor.x;
@@ -2328,18 +2227,18 @@ HRESULT Mesh::ExportToSDKMESH(const wchar_t* szFileName, size_t nMaterials, cons
         auto subsets = ComputeSubsets(mAttributes.get(), mnFaces);
 
         UINT64 startIndex = 0;
-        for (auto it = subsets.cbegin(); it != subsets.cend(); ++it)
+        for (const auto& it : subsets)
         {
             subsetArray.push_back(static_cast<UINT>(submeshes.size()));
 
             SDKMESH_SUBSET s = {};
-            s.MaterialID = mAttributes[it->first];
+            s.MaterialID = mAttributes[it.first];
             if (s.MaterialID >= nMaterials)
                 s.MaterialID = 0;
 
             s.PrimitiveType = PT_TRIANGLE_LIST;
             s.IndexStart = startIndex;
-            s.IndexCount = uint64_t(it->second) * 3;
+            s.IndexCount = uint64_t(it.second) * 3;
             s.VertexCount = mnVerts;
             submeshes.push_back(s);
 
@@ -2361,16 +2260,18 @@ HRESULT Mesh::ExportToSDKMESH(const wchar_t* szFileName, size_t nMaterials, cons
 
     // Create file
 #if (_WIN32_WINNT >= _WIN32_WINNT_WIN8)
-    ScopedHandle hFile(safe_handle(CreateFile2(szFileName, GENERIC_WRITE, 0, CREATE_ALWAYS, nullptr)));
+    ScopedHandle hFile(safe_handle(CreateFile2(szFileName,
+        GENERIC_WRITE, 0, CREATE_ALWAYS, nullptr)));
 #else
-    ScopedHandle hFile(safe_handle(CreateFileW(szFileName, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, 0, nullptr)));
+    ScopedHandle hFile(safe_handle(CreateFileW(szFileName,
+        GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr)));
 #endif
     if (!hFile)
         return HRESULT_FROM_WIN32(GetLastError());
 
     // Write file header
     SDKMESH_HEADER header = {};
-    header.Version = SDKMESH_FILE_VERSION;
+    header.Version = (version2) ? SDKMESH_FILE_VERSION_V2 : SDKMESH_FILE_VERSION;
     header.IsBigEndian = 0;
 
     header.NumVertexBuffers = 1;
@@ -2446,7 +2347,7 @@ HRESULT Mesh::ExportToSDKMESH(const wchar_t* szFileName, size_t nMaterials, cons
         return hr;
 
     // Write subsets
-    DWORD bytesToWrite = static_cast<DWORD>(sizeof(SDKMESH_SUBSET) * submeshes.size());
+    auto bytesToWrite = static_cast<DWORD>(sizeof(SDKMESH_SUBSET) * submeshes.size());
     DWORD bytesWritten;
     if (!WriteFile(hFile.get(), submeshes.data(), bytesToWrite, &bytesWritten, nullptr))
         return HRESULT_FROM_WIN32(GetLastError());

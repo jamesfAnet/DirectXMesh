@@ -30,6 +30,7 @@
     <ClInclude Include="json.hpp">
       <Filter>glTF</Filter>
     </ClInclude>
+    <ClInclude Include="SDKMesh.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Meshconvert.rc">
